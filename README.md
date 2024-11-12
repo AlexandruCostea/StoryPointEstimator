@@ -2,7 +2,6 @@
 
 This repository contains code for training and evaluating and exporting models for story point estimation.
 
-link the dataset here
 The dataset used for training is the [IEEE TSE2018 dataset](https://github.com/jai2shukla/JIRA-Estimation-Prediction/tree/master/storypoint/IEEE%20TSE2018/dataset) which contains user stories from 16 open-source projects from 9 different organizations.
 
 
