@@ -43,13 +43,15 @@ class DFGenerator:
             data.append(df)
             storypoint_df = pd.concat(data, axis=0, ignore_index=True)
 
-        fibonacci_numbers = [1, 2, 3, 5, 8, 13]
-        storypoint_df = storypoint_df[storypoint_df['storypoint'].isin(fibonacci_numbers)]
+        storypoint_df['storypoint'] = storypoint_df['storypoint'].apply(lambda x: 14 if x > 13 else x)
+        
+        labels = [1, 2, 3, 5, 8, 13, 14]  # 14 means value too high, ticket needs to be split
+        storypoint_df = storypoint_df[storypoint_df['storypoint'].isin(labels)]
 
         storypoint_df['text'] = storypoint_df['title'] + ' ' + storypoint_df['description'].fillna('')
         storypoint_df = storypoint_df[['text', 'storypoint']]
 
-        label_mapping = {1: 0, 2: 1, 3: 2, 5: 3, 8: 4, 13: 5}
+        label_mapping = {1: 0, 2: 1, 3: 2, 5: 3, 8: 4, 13: 5, 14: 6}
         storypoint_df['label'] = storypoint_df['storypoint'].map(label_mapping)
         storypoint_df = storypoint_df[['text', 'label']]
 

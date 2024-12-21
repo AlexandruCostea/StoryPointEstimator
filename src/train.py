@@ -7,8 +7,12 @@ from tqdm import tqdm
 
 import torch
 from torch.utils import data
+from sklearn.metrics import f1_score, precision_score, recall_score, confusion_matrix
+import numpy as np
+
 from data_loader import DFGenerator, StoryPointDataset
 from models import get_model_and_tokenizer
+from utils import serialize_metrics
 
 
 def parse_args() -> argparse.Namespace:
@@ -30,7 +34,6 @@ def parse_args() -> argparse.Namespace:
 
     # Model saving details
     parser.add_argument('--experiment_name', type=str, default='storypoint_estimator', help='Experiment name (for checkpoint naming)')
-    parser.add_argument('--save_epoch', type=bool, default=True, help='Save checkpoint after each training epoch (default saves only best model)')
     return parser.parse_args()
 
 
@@ -84,10 +87,7 @@ class Trainer():
 
 
         self.eval = args.eval
-        self.save_epoch = args.save_epoch
         self.experiment_name = args.experiment_name
-        self.best_train_accuracy = 0
-        self.best_val_accuracy = 0
 
 
     def train(self):
@@ -97,6 +97,9 @@ class Trainer():
             correct_predictions = 0
             total_predictions = 0
             total_loss = 0
+
+            all_labels = []
+            all_predictions = []
 
             for batch in tqdm(self.train_loader, desc=f'Epoch {epoch+1}/{self.epochs}'):
                 inputs = {k: v.to(self.model.device) for k, v in batch.items()}
@@ -110,26 +113,45 @@ class Trainer():
 
                 total_loss += loss.item()
                 _, predicted = torch.max(outputs.logits, 1)
+
                 correct_predictions += (predicted == batch['labels'].to(self.model.device)).sum().item()
                 total_predictions += len(batch['labels'])
+
+                all_labels.extend(batch['labels'].cpu().numpy())
+                all_predictions.extend(predicted.cpu().numpy())
+
+            all_labels = np.array(all_labels)
+            all_predictions = np.array(all_predictions)
 
             epoch_lr = self.optimizer.param_groups[0]['lr']
             self.lr_scheduler.step()
 
             average_loss = total_loss / len(self.train_loader)
             accuracy = correct_predictions / total_predictions
+            macro_f1 = f1_score(all_labels, all_predictions, average='macro')
+            weighted_f1 = f1_score(all_labels, all_predictions, average='weighted')
+            precision = precision_score(all_labels, all_predictions, average='macro')
+            recall = recall_score(all_labels, all_predictions, average='macro')
+            conf_matrix = confusion_matrix(all_labels, all_predictions)
 
-            epoch_message = f'Epoch {epoch+1}/{self.epochs} - Loss: {average_loss:.4f}, Accuracy: {accuracy:.4f}, LR: {epoch_lr:.8f}'
+            metrics = (accuracy, macro_f1, weighted_f1, precision, recall, conf_matrix)
+
+
+            epoch_message = f"Training - Epoch {epoch+1}/{self.epochs}: Loss - {average_loss:.4f}\t\tLR - {epoch_lr:.8f}\n"
+
             print(epoch_message)
             self.logger.info(epoch_message)
 
-            self.save_checkpoint('train', accuracy, epoch)
 
             if self.eval and self.val_loader:
-                self.evaluate(epoch)
+                self.evaluate(epoch, metrics)
+            
+            else:
+                self.save_checkpoint('train', metrics, epoch)
 
 
-    def evaluate(self, epoch):
+
+    def evaluate(self, epoch, train_metrics = None):
 
         if self.val_loader is None:
             return
@@ -137,6 +159,9 @@ class Trainer():
         self.model.eval()
         correct_predictions = 0
         total_predictions = 0
+
+        all_labels = []
+        all_predictions = []
 
         for batch in tqdm(self.val_loader, desc=f'Validation - Epoch {epoch+1}/{self.epochs}'):
             inputs = {k: v.to(self.model.device) for k, v in batch.items()}
@@ -147,29 +172,42 @@ class Trainer():
             correct_predictions += (predicted == batch['labels'].to(self.model.device)).sum().item()
             total_predictions += len(batch['labels'])
 
+            all_labels.extend(batch['labels'].cpu().numpy())
+            all_predictions.extend(predicted.cpu().numpy())
+
+        all_labels = np.array(all_labels)
+        all_predictions = np.array(all_predictions)
+
         accuracy = correct_predictions / total_predictions
-        validation_message = f'Validation - Epoch {epoch+1}/{self.epochs} - Accuracy: {accuracy:.4f}'
+        macro_f1 = f1_score(all_labels, all_predictions, average='macro')
+        weighted_f1 = f1_score(all_labels, all_predictions, average='weighted')
+        precision = precision_score(all_labels, all_predictions, average='macro')
+        recall = recall_score(all_labels, all_predictions, average='macro')
+        conf_matrix = confusion_matrix(all_labels, all_predictions)
 
-        print(validation_message)
-        self.logger.info(validation_message)
+        metrics = (accuracy, macro_f1, weighted_f1, precision, recall, conf_matrix)
 
-        self.save_checkpoint('val', accuracy)
+        if train_metrics is not None:
+            all_metrics = list(train_metrics)
+            all_metrics.extend(metrics)
+            metrics = tuple(all_metrics)
+
+            self.save_checkpoint('both', metrics, epoch)
+
+        else:
+            self.save_checkpoint('val', metrics, epoch)
 
  
-    def save_checkpoint(self, mode, accuracy, epoch=0):
+    def save_checkpoint(self, mode, metrics, epoch=0):
 
-        if mode == 'train':
-            if accuracy > self.best_train_accuracy:
-                self.best_train_accuracy = accuracy
-                torch.save(self.model.state_dict(), f'{self.checkpoints_dir}/{self.experiment_name}_best_train.pth')
-            
-            if self.save_epoch:
-                torch.save(self.model.state_dict(), f'{self.checkpoints_dir}/{self.experiment_name}_{epoch+1}.pth')
+        json_data = serialize_metrics(mode, metrics)
 
-        elif mode == 'val':
-            if accuracy > self.best_val_accuracy:
-                self.best_val_accuracy = accuracy
-                torch.save(self.model.state_dict(), f'{self.checkpoints_dir}/{self.experiment_name}_best_val.pth')
+        checkpoint_dir = f'{self.checkpoints_dir}/epoch_{epoch+1}'
+        os.makedirs(checkpoint_dir, exist_ok=True)
+
+        torch.save(self.model.state_dict(), f'{checkpoint_dir}/{self.experiment_name}_{epoch+1}.pth')
+        with open(f'{checkpoint_dir}/metrics.json', 'w') as f:
+            f.write(json_data)
 
 
 
