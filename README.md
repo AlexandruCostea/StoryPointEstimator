@@ -50,10 +50,10 @@ Train a model with your desired options while also seing validation results
 python train.py <options>
 ```
 
-Users can see in the experiments folder the results of their experiments in a folder with the experiment's name. The folder contains:
-        - a checkpoints folder with the model's saved checkpoints
+Users can see in the experiments folder the results in a folder with the experiment's name. The folder contains:
+        - a checkpoints folder where the results of each epoch and their according performance metrics are stored
         - a params.json file with the experiment's parameters
-        - a log file with the experiment's logs regarding the training and validation results
+        - a log file with the experiment's logs regarding the training process
 
 
 #### Evaluate existing models
