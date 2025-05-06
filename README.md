@@ -86,3 +86,18 @@ python export.py <options>
 ```
 
 Exports the model and tokenizer to the specified directory. The <b>model</b> is stored in a <b>.safetensors</b> file (for python users) and an <b>.onnx</b> file for other languages, and the <b>tokenizer</b> is stored in a <b>vocab.txt</b> file and 4 json files: <b>config.json, special_tokens_map.json, tokenizer_config.json, and tokenizer.json</b>.
+
+
+#### Estimate a ticket
+
+See estimate utility details
+
+```bash
+python estimate.py --help
+```
+
+Estimate a ticket with desired model checkpoint
+
+```bash
+python export.py --checkpoint=<desired checkpoint>
+```
