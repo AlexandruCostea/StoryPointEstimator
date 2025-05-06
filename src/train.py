@@ -41,7 +41,7 @@ class Trainer():
 
     def __init__(self, args):
 
-        self.experiment_dir = f'experiments/{args.experiment_name}'
+        self.experiment_dir = f'../experiments/{args.experiment_name}'
         self.checkpoints_dir = f'{self.experiment_dir}/checkpoints'
 
         os.makedirs(self.experiment_dir, exist_ok=True)
